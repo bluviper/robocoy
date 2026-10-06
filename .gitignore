@@ -1,0 +1,21 @@
+## Visual Studio / .NET build artifacts
+bin/
+obj/
+TestResults/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+.vscode/
+
+## Logs & Config runtime files
+logs/
+config.json
+
+## Local scratch test folders
+test/
+test_results.txt
+
+## Tooling cache
+.claude/
