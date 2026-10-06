@@ -73,14 +73,21 @@ namespace RobocopyGui
         private static readonly Regex SummaryFilesRegex = new Regex(@"^\s*Files\s*:\s*(\d+)\s*(\d+)", RegexOptions.Compiled);
 
         private static readonly string LogDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
-        private static readonly string LogFilePath = Path.Combine(LogDirectory, $"robocopy_{DateTime.Now:yyyyMMdd_HHmmss}.log");
+        private readonly object _logLock = new object();
+        private StreamWriter? _logWriter;
 
         private void WriteLog(string message)
         {
             try
             {
-                if (!Directory.Exists(LogDirectory)) Directory.CreateDirectory(LogDirectory);
-                File.AppendAllText(LogFilePath, $"{DateTime.Now:HH:mm:ss} - {message}{Environment.NewLine}");
+                lock (_logLock)
+                {
+                    if (_logWriter != null)
+                    {
+                        _logWriter.WriteLine($"{DateTime.Now:HH:mm:ss} - {message}");
+                        _logWriter.Flush();
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -96,118 +103,104 @@ namespace RobocopyGui
             string[] excludedFiles)
         {
             _cts = new CancellationTokenSource();
-            _totalFiles = CountFiles(source, config.FileFilter, excludedDirs);
+            _totalFiles = 0;
             _copiedFiles = 0;
             UpdateOverallProgress();
 
-            // Build Robocopy command line arguments
-            var argsBuilder = new StringBuilder();
-
-            argsBuilder.Append($"\"{source}\" \"{destination}\"");
-            if (!string.IsNullOrWhiteSpace(config.FileFilter))
-            {
-                argsBuilder.Append($" {config.FileFilter}");
-            }
-
-            argsBuilder.Append(" /E");
-            if (config.UseUnbufferedIo) argsBuilder.Append(" /J");
-            if (config.UseRestartableMode) argsBuilder.Append(" /Z");
-            argsBuilder.Append($" /R:{config.Retries}");
-            argsBuilder.Append($" /W:{config.WaitTime}");
-
-            if (excludedDirs.Length > 0)
-            {
-                argsBuilder.Append(" /XD");
-                foreach (var dir in excludedDirs)
-                {
-                    argsBuilder.Append($" \"{dir}\"");
-                }
-            }
-            if (excludedFiles.Length > 0)
-            {
-                argsBuilder.Append(" /XF");
-                foreach (var file in excludedFiles)
-                {
-                    argsBuilder.Append($" \"{file}\"");
-                }
-            }
-
-            argsBuilder.Append(" /V /BYTES");
-
-            string args = argsBuilder.ToString();
-            WriteLog($"Starting Robocopy (Target: {_totalFiles} files): robocopy.exe {args}");
-            StatusChanged?.Invoke(this, "Starting Robocopy process...");
-
-            _process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = "robocopy.exe",
-                    Arguments = args,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true,
-                    StandardOutputEncoding = Encoding.GetEncoding(850)
-                }
-            };
-            // ... (rest of method continues)
-
-            // Helper to count files
-            static int CountFiles(string path, string filter, string[] excludedDirs)
-            {
-                int count = 0;
-                try
-                {
-                    var dirInfo = new DirectoryInfo(path);
-                    foreach (var file in dirInfo.EnumerateFiles(filter, SearchOption.AllDirectories))
-                    {
-                        // Check if file is inside any excluded directory
-                        bool isExcluded = false;
-                        foreach (var excludedDir in excludedDirs)
-                        {
-                            if (file.FullName.StartsWith(excludedDir, StringComparison.OrdinalIgnoreCase))
-                            {
-                                isExcluded = true;
-                                break;
-                            }
-                        }
-                        if (!isExcluded) count++;
-                    }
-                }
-                catch { /* Ignore access errors */ }
-                return count;
-            }
-
+            if (!Directory.Exists(LogDirectory)) Directory.CreateDirectory(LogDirectory);
+            string logFilePath = Path.Combine(LogDirectory, $"robocopy_{DateTime.Now:yyyyMMdd_HHmmss}.log");
+            using var fileStream = new FileStream(logFilePath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
+            using var writer = new StreamWriter(fileStream, Encoding.UTF8);
+            _logWriter = writer;
 
             try
             {
-                if (!_process.Start())
+                // Build Robocopy command line arguments
+                var argsBuilder = new StringBuilder();
+
+                argsBuilder.Append($"\"{source}\" \"{destination}\"");
+                if (!string.IsNullOrWhiteSpace(config.FileFilter))
                 {
-                    WriteLog("Failed to start robocopy.exe");
-                    throw new InvalidOperationException("Failed to start robocopy.exe");
+                    argsBuilder.Append($" {config.FileFilter}");
                 }
+
+                argsBuilder.Append(" /E");
+                if (config.UseUnbufferedIo) argsBuilder.Append(" /J");
+                if (config.UseRestartableMode) argsBuilder.Append(" /Z");
+                argsBuilder.Append($" /R:{config.Retries}");
+                argsBuilder.Append($" /W:{config.WaitTime}");
+
+                if (excludedDirs.Length > 0)
+                {
+                    argsBuilder.Append(" /XD");
+                    foreach (var dir in excludedDirs)
+                    {
+                        argsBuilder.Append($" \"{dir}\"");
+                    }
+                }
+                if (excludedFiles.Length > 0)
+                {
+                    argsBuilder.Append(" /XF");
+                    foreach (var file in excludedFiles)
+                    {
+                        argsBuilder.Append($" \"{file}\"");
+                    }
+                }
+
+                argsBuilder.Append(" /V /BYTES");
+
+                string args = argsBuilder.ToString();
+                WriteLog($"Starting Robocopy: robocopy.exe {args}");
+                StatusChanged?.Invoke(this, "Starting Robocopy process...");
+
+                _process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "robocopy.exe",
+                        Arguments = args,
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        CreateNoWindow = true,
+                        StandardOutputEncoding = Encoding.GetEncoding(850)
+                    }
+                };
+
+                try
+                {
+                    if (!_process.Start())
+                    {
+                        WriteLog("Failed to start robocopy.exe");
+                        throw new InvalidOperationException("Failed to start robocopy.exe");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    WriteLog($"Error starting process: {ex.Message}");
+                    StatusChanged?.Invoke(this, $"Error: {ex.Message}");
+                    return -1;
+                }
+
+                // Run the output parsing in a background task
+                Task outputTask = ReadStreamAsync(_process.StandardOutput, _cts.Token);
+                Task errorTask = ReadStreamAsync(_process.StandardError, _cts.Token);
+
+                await Task.WhenAll(outputTask, errorTask);
+
+                await _process.WaitForExitAsync();
+                int exitCode = _process.ExitCode;
+
+                string exitMessage = MapExitCode(exitCode);
+                WriteLog($"Completed: {exitMessage} (Code {exitCode})");
+                StatusChanged?.Invoke(this, $"Completed: {exitMessage} (Code {exitCode})");
+
+                return exitCode;
             }
-            catch (Exception ex)
+            finally
             {
-                WriteLog($"Error starting process: {ex.Message}");
-                StatusChanged?.Invoke(this, $"Error: {ex.Message}");
-                return -1;
+                _logWriter = null;
             }
-
-            // Run the output parsing in a background task
-            Task outputTask = ReadStreamAsync(_process.StandardOutput, _cts.Token);
-            Task errorTask = ReadStreamAsync(_process.StandardError, _cts.Token);
-
-            await Task.WhenAll(outputTask, errorTask);
-
-            await _process.WaitForExitAsync();
-            int exitCode = _process.ExitCode;
-
-            string exitMessage = MapExitCode(exitCode);
-            StatusChanged?.Invoke(this, $"Completed: {exitMessage} (Code {exitCode})");
-
-            return exitCode;
         }
 
         public void Stop()
@@ -227,6 +220,12 @@ namespace RobocopyGui
             }
         }
 
+        private static bool IsProgressOnlyLine(string line)
+        {
+            string clean = line.Trim();
+            return clean.EndsWith("%") && ProgressRegex.IsMatch(clean) && !clean.Contains("New File") && !clean.Contains("New Dir");
+        }
+
         private async Task ReadStreamAsync(StreamReader reader, CancellationToken token)
         {
             char[] buffer = new char[4096];
@@ -236,10 +235,10 @@ namespace RobocopyGui
             {
                 while (!token.IsCancellationRequested)
                 {
-                    int bytesRead = await reader.ReadAsync(buffer, token);
-                    if (bytesRead == 0) break;
+                    int charsRead = await reader.ReadAsync(buffer, token);
+                    if (charsRead == 0) break;
 
-                    for (int i = 0; i < bytesRead; i++)
+                    for (int i = 0; i < charsRead; i++)
                     {
                         char c = buffer[i];
 
@@ -250,7 +249,10 @@ namespace RobocopyGui
                             if (lineBuilder.Length > 0)
                             {
                                 string line = lineBuilder.ToString();
-                                WriteLog(line); // Log every line
+                                if (!IsProgressOnlyLine(line))
+                                {
+                                    WriteLog(line);
+                                }
                                 ParseLine(line);
                                 lineBuilder.Clear();
                             }
@@ -329,11 +331,8 @@ namespace RobocopyGui
 
         private void UpdateOverallProgress()
         {
-            if (_totalFiles > 0)
-            {
-                int overallPct = (_copiedFiles * 100) / _totalFiles;
-                OverallProgressChanged?.Invoke(this, new RobocopyOverallProgressEventArgs(_totalFiles, _copiedFiles, Math.Clamp(overallPct, 0, 100)));
-            }
+            int overallPct = _totalFiles > 0 ? Math.Clamp((_copiedFiles * 100) / _totalFiles, 0, 100) : 0;
+            OverallProgressChanged?.Invoke(this, new RobocopyOverallProgressEventArgs(_totalFiles, _copiedFiles, overallPct));
         }
 
         public static string MapExitCode(int code)

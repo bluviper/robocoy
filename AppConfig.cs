@@ -18,6 +18,12 @@ namespace RobocopyGui
 
         public static AppConfig Load()
         {
+            return Load(out _);
+        }
+
+        public static AppConfig Load(out string? error)
+        {
+            error = null;
             try
             {
                 if (File.Exists(ConfigPath))
@@ -28,22 +34,37 @@ namespace RobocopyGui
             }
             catch (Exception ex)
             {
-                // Simple fail-safe default, we can log to a file or Console
+                error = ex.Message;
                 System.Diagnostics.Debug.WriteLine($"Failed to load config: {ex.Message}");
             }
             return new AppConfig();
         }
 
-        public void Save()
+        public bool Save()
         {
+            return Save(out _);
+        }
+
+        public bool Save(out string? error)
+        {
+            error = null;
             try
             {
+                string? dir = Path.GetDirectoryName(ConfigPath);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
+
                 string json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(ConfigPath, json);
+                return true;
             }
             catch (Exception ex)
             {
+                error = ex.Message;
                 System.Diagnostics.Debug.WriteLine($"Failed to save config: {ex.Message}");
+                return false;
             }
         }
     }

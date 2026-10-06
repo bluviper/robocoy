@@ -68,5 +68,38 @@ namespace RobocopyGui.Tests
 
             Assert.AreEqual("MyDocument.pdf", reportedFile);
         }
+
+        [TestMethod]
+        public void TestOverallProgressAndSummaryParsing()
+        {
+            var runner = new RobocopyRunner();
+            int total = -1;
+            int copied = -1;
+            int percentage = -1;
+
+            runner.OverallProgressChanged += (sender, args) =>
+            {
+                total = args.TotalFiles;
+                copied = args.CopiedFiles;
+                percentage = args.OverallPercentage;
+            };
+
+            // First file copied
+            runner.ParseLine("	    New File  		      1024	file1.txt");
+            Assert.AreEqual(0, total);
+            Assert.AreEqual(1, copied);
+            Assert.AreEqual(0, percentage);
+
+            // Second file copied
+            runner.ParseLine("	    New File  		      2048	file2.txt");
+            Assert.AreEqual(0, total);
+            Assert.AreEqual(2, copied);
+
+            // Summary line arrives: 2 total files
+            runner.ParseLine("   Files :         2         2         0         0         0         0");
+            Assert.AreEqual(2, total);
+            Assert.AreEqual(2, copied);
+            Assert.AreEqual(100, percentage);
+        }
     }
 }

@@ -315,7 +315,7 @@ namespace RobocopyGui
             }
         }
 
-        private void SaveUiToConfig()
+        private void SyncUiToConfig()
         {
             _config.SourcePath = txtSource.Text;
             _config.DestinationPath = txtDestination.Text;
@@ -324,7 +324,6 @@ namespace RobocopyGui
             _config.Retries = (int)numRetries.Value;
             _config.WaitTime = (int)numWait.Value;
             _config.FileFilter = txtFileFilter.Text;
-            _config.Save();
         }
 
         private void BtnBrowseSource_Click(object? sender, EventArgs e)
@@ -496,8 +495,15 @@ namespace RobocopyGui
 
         private void BtnSaveConfig_Click(object? sender, EventArgs e)
         {
-            SaveUiToConfig();
-            MessageBox.Show("Settings saved successfully!", "Settings", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            SyncUiToConfig();
+            if (_config.Save(out string? error))
+            {
+                MessageBox.Show("Settings saved successfully!", "Settings", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else
+            {
+                MessageBox.Show($"Failed to save settings: {error}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private async void BtnStart_Click(object? sender, EventArgs e)
@@ -517,10 +523,21 @@ namespace RobocopyGui
                 return;
             }
 
-            // Simple guard to prevent copying a folder to itself or its child
-            if (dest.StartsWith(source, StringComparison.OrdinalIgnoreCase))
+            // Guard to prevent copying a folder to itself or its child
+            try
             {
-                MessageBox.Show("Destination folder cannot be the source folder itself or one of its child directories.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                string fullSource = Path.GetFullPath(source).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                string fullDest = Path.GetFullPath(dest).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+
+                if (fullDest.StartsWith(fullSource, StringComparison.OrdinalIgnoreCase))
+                {
+                    MessageBox.Show("Destination folder cannot be the source folder itself or one of its child directories.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Invalid path format: {ex.Message}", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -542,7 +559,8 @@ namespace RobocopyGui
             var excludedDirs = GetExcludedDirectories();
 
             // Save state before run
-            SaveUiToConfig();
+            SyncUiToConfig();
+            _config.Save();
 
             // Set running state
             SetUiRunningState(true);
@@ -602,6 +620,11 @@ namespace RobocopyGui
             numWait.Enabled = !running;
             txtFileFilter.Enabled = !running;
             btnSaveConfig.Enabled = !running;
+
+            if (!running)
+            {
+                overallProgressBar.Style = ProgressBarStyle.Blocks;
+            }
         }
 
         private void Runner_ProgressChanged(object? sender, RobocopyProgressEventArgs e)
@@ -627,8 +650,19 @@ namespace RobocopyGui
                 return;
             }
 
-            overallProgressBar.Value = Math.Clamp(e.OverallPercentage, 0, 100);
-            lblOverallProgress.Text = $"Overall Progress: {e.CopiedFiles} of {e.TotalFiles} files copied ({e.OverallPercentage}%)";
+            if (e.TotalFiles > 0)
+            {
+                overallProgressBar.Style = ProgressBarStyle.Blocks;
+                overallProgressBar.Value = Math.Clamp(e.OverallPercentage, 0, 100);
+                lblOverallProgress.Text = $"Overall Progress: {e.CopiedFiles} of {e.TotalFiles} files copied ({e.OverallPercentage}%)";
+            }
+            else
+            {
+                overallProgressBar.Style = ProgressBarStyle.Marquee;
+                lblOverallProgress.Text = e.CopiedFiles > 0
+                    ? $"Overall Progress: {e.CopiedFiles} file(s) copied..."
+                    : "Overall Progress: Transfer in progress...";
+            }
         }
 
         private void Runner_OutputReceived(object? sender, RobocopyOutputEventArgs e)
