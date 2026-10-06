@@ -6,9 +6,15 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>RobocopyGui</AssemblyName>
+    <AssemblyName>ROBOCoy</AssemblyName>
     <RootNamespace>RobocopyGui</RootNamespace>
     <ApplicationIcon>app.ico</ApplicationIcon>
+    <AssemblyTitle>ROBOCoy: Your GUI version</AssemblyTitle>
+    <Product>ROBOCoy: Your GUI version</Product>
+    <Description>ROBOCoy: Modern Windows GUI wrapper for robocopy with squircle cards, realtime visual feedback, and reliable folder replication.</Description>
+    <Version>1.0.0</Version>
+    <FileVersion>1.0.0.0</FileVersion>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
   </PropertyGroup>
 
   <ItemGroup>

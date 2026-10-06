@@ -1,6 +1,7 @@
 ## Visual Studio / .NET build artifacts
 bin/
 obj/
+publish/
 TestResults/
 *.user
 *.suo
