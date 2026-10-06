@@ -9,103 +9,6 @@ using System.Windows.Forms;
 
 namespace RobocopyGui
 {
-    // Helper class for rounded rectangle drawing
-    public static class GraphicsExtensions
-    {
-        public static void AddRoundRect(this GraphicsPath path, Rectangle rect, int radius)
-        {
-            float diameter = radius * 2;
-            SizeF size = new SizeF(diameter, diameter);
-
-            RectangleF arc = new RectangleF(rect.Location, size);
-            path.AddArc(arc, 180, 90);
-
-            arc.X = rect.Right - diameter;
-            path.AddArc(arc, 270, 90);
-
-            arc.Y = rect.Bottom - diameter;
-            path.AddArc(arc, 0, 90);
-
-            arc.X = rect.Left;
-            path.AddArc(arc, 90, 90);
-        }
-    }
-
-    // Custom control for rounded textboxes
-    public class RoundedTextBox : TextBox
-    {
-        private int _borderRadius = 4;
-        private Color _borderColor = Color.FromArgb(210, 214, 220);
-
-        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
-        public int BorderRadius
-        {
-            get { return _borderRadius; }
-            set { _borderRadius = value; this.Invalidate(); }
-        }
-
-        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
-        public Color BorderColor
-        {
-            get { return _borderColor; }
-            set { _borderColor = value; this.Invalidate(); }
-        }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            base.OnPaint(e);
-
-            // Draw rounded rectangle border
-            using (GraphicsPath path = new GraphicsPath())
-            {
-                path.AddRoundRect(new Rectangle(0, 0, this.ClientSize.Width, this.ClientSize.Height), _borderRadius);
-                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-                using (Pen pen = new Pen(_borderColor, 1))
-                {
-                    e.Graphics.DrawPath(pen, path);
-                }
-            }
-        }
-    }
-
-    // Custom control for rounded buttons
-    public class RoundedButton : Button
-    {
-        private int _borderRadius = 4;
-
-        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
-        public int BorderRadius
-        {
-            get { return _borderRadius; }
-            set { _borderRadius = value; this.Invalidate(); }
-        }
-
-        protected override void OnPaint(PaintEventArgs pevent)
-        {
-            base.OnPaint(pevent);
-
-            // Draw rounded rectangle background
-            using (GraphicsPath path = new GraphicsPath())
-            {
-                path.AddRoundRect(new Rectangle(0, 0, this.Width, this.Height), _borderRadius);
-                pevent.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-                using (SolidBrush brush = new SolidBrush(this.BackColor))
-                {
-                    pevent.Graphics.FillPath(brush, path);
-                }
-
-                // Draw border if needed
-                if (this.FlatStyle == FlatStyle.Flat && this.FlatAppearance.BorderSize > 0)
-                {
-                    using (Pen pen = new Pen(this.FlatAppearance.BorderColor, this.FlatAppearance.BorderSize))
-                    {
-                        pevent.Graphics.DrawPath(pen, path);
-                    }
-                }
-            }
-        }
-    }
-
     public class MainForm : Form
     {
         private readonly AppConfig _config;
@@ -137,10 +40,14 @@ namespace RobocopyGui
         private Label lblOverallProgress = null!;
         private TextBox txtLog = null!;
 
-        // Panels to replace GroupBoxes for modern look
+        // Card Container Panels
+        private Panel pnlPaths = null!;
         private Panel pnlFolders = null!;
         private Panel pnlOptions = null!;
+        private Panel pnlActions = null!;
+        private Panel pnlOverall = null!;
         private Panel pnlProgress = null!;
+        private ToolTip toolTip = null!;
 
         public MainForm()
         {
@@ -160,51 +67,115 @@ namespace RobocopyGui
         private void InitializeFormComponents()
         {
             // Main Window Settings
-            this.Text = "Robocopy GUI Wrapper (Phase 1)";
-            this.Size = new Size(950, 780); // Slightly larger for more whitespace
-            this.MinimumSize = new Size(850, 700);
+            this.Text = "Robocopy GUI Wrapper";
+            this.Size = new Size(960, 800);
+            this.MinimumSize = new Size(960, 750);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.Font = new Font("Segoe UI", 9.5F, FontStyle.Regular, GraphicsUnit.Point);
-            this.BackColor = Color.FromArgb(245, 246, 248); // Modern light-gray background
+            this.BackColor = Color.FromArgb(244, 246, 249);
 
-            // Top Section: Path inputs
-            var lblSource = new Label { Text = "Source Folder:", Location = new Point(30, 25), Size = new Size(110, 25), TextAlign = ContentAlignment.MiddleLeft, Font = new Font(this.Font, FontStyle.Bold) };
-            txtSource = new RoundedTextBox { Location = new Point(150, 25), Size = new Size(650, 30), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right, BorderStyle = BorderStyle.None, BorderRadius = 6, Font = new Font(this.Font, FontStyle.Regular) };
-            txtSource.TextChanged += TxtSource_TextChanged;
-            btnBrowseSource = new RoundedButton { Text = "", Location = new Point(810, 25), Size = new Size(30, 30), Anchor = AnchorStyles.Top | AnchorStyles.Right, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(230, 230, 230), BorderRadius = 6 };
-            btnBrowseSource.Image = CreateFolderIcon();
-            btnBrowseSource.ImageAlign = ContentAlignment.MiddleCenter;
-            btnBrowseSource.TextAlign = ContentAlignment.MiddleCenter;
-            btnBrowseSource.FlatAppearance.BorderColor = Color.FromArgb(210, 214, 220);
-            btnBrowseSource.Click += BtnBrowseSource_Click;
-
-            var lblDest = new Label { Text = "Target Folder:", Location = new Point(30, 65), Size = new Size(110, 25), TextAlign = ContentAlignment.MiddleLeft, Font = new Font(this.Font, FontStyle.Bold) };
-            txtDestination = new RoundedTextBox { Location = new Point(150, 65), Size = new Size(650, 30), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right, BorderStyle = BorderStyle.None, BorderRadius = 6, Font = new Font(this.Font, FontStyle.Regular) };
-            btnBrowseDest = new RoundedButton { Text = "", Location = new Point(810, 65), Size = new Size(30, 30), Anchor = AnchorStyles.Top | AnchorStyles.Right, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(230, 230, 230), BorderRadius = 6 };
-            btnBrowseDest.Image = CreateFolderIcon();
-            btnBrowseDest.ImageAlign = ContentAlignment.MiddleCenter;
-            btnBrowseDest.TextAlign = ContentAlignment.MiddleCenter;
-            btnBrowseDest.FlatAppearance.BorderColor = Color.FromArgb(210, 214, 220);
-            btnBrowseDest.Click += BtnBrowseDest_Click;
-
-            this.Controls.AddRange(new Control[] { lblSource, txtSource, btnBrowseSource, lblDest, txtDestination, btnBrowseDest });
-
-            // Panelled Sections (Card Style)
-            pnlFolders = new Panel
+            toolTip = new ToolTip
             {
-                Location = new Point(30, 100),
-                Size = new Size(425, 260),
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom,
+                AutoPopDelay = 5000,
+                InitialDelay = 200,
+                ReshowDelay = 100,
+                ShowAlways = true
+            };
+
+            // 1. TOP-LEFT CARD: Path Inputs (Narrowed to half-width, matching Subfolder Selection)
+            pnlPaths = new Panel
+            {
+                Location = new Point(25, 20),
+                Size = new Size(435, 118),
                 BackColor = Color.White,
                 Padding = new Padding(12)
             };
-            var lblFoldersTitle = new Label { Text = "Subfolder Selection (Uncheck to Exclude)", Location = new Point(12, 10), Size = new Size(400, 22), AutoSize = false, TextAlign = ContentAlignment.MiddleLeft, Font = new Font(this.Font, FontStyle.Bold) };
+            pnlPaths.Paint += DrawCardBorder;
+
+            var lblSource = new Label
+            {
+                Text = "Source:",
+                Location = new Point(12, 16),
+                Size = new Size(60, 26),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Font = new Font(this.Font, FontStyle.Bold)
+            };
+            txtSource = new TextBox
+            {
+                Location = new Point(76, 16),
+                Size = new Size(305, 26),
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font(this.Font, FontStyle.Regular)
+            };
+            txtSource.TextChanged += TxtSource_TextChanged;
+
+            btnBrowseSource = new Button
+            {
+                Location = new Point(386, 14),
+                Size = new Size(36, 30),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(248, 249, 250),
+                Image = CreateFolderIcon(),
+                Cursor = Cursors.Hand
+            };
+            btnBrowseSource.FlatAppearance.BorderColor = Color.FromArgb(209, 213, 219);
+            btnBrowseSource.Click += BtnBrowseSource_Click;
+            toolTip.SetToolTip(btnBrowseSource, "Browse Source Folder");
+
+            var lblDest = new Label
+            {
+                Text = "Target:",
+                Location = new Point(12, 64),
+                Size = new Size(60, 26),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Font = new Font(this.Font, FontStyle.Bold)
+            };
+            txtDestination = new TextBox
+            {
+                Location = new Point(76, 64),
+                Size = new Size(305, 26),
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font(this.Font, FontStyle.Regular)
+            };
+
+            btnBrowseDest = new Button
+            {
+                Location = new Point(386, 62),
+                Size = new Size(36, 30),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(248, 249, 250),
+                Image = CreateFolderIcon(),
+                Cursor = Cursors.Hand
+            };
+            btnBrowseDest.FlatAppearance.BorderColor = Color.FromArgb(209, 213, 219);
+            btnBrowseDest.Click += BtnBrowseDest_Click;
+            toolTip.SetToolTip(btnBrowseDest, "Browse Target Folder");
+
+            pnlPaths.Controls.AddRange(new Control[] { lblSource, txtSource, btnBrowseSource, lblDest, txtDestination, btnBrowseDest });
+            this.Controls.Add(pnlPaths);
+
+            // 2. BOTTOM-LEFT CARD: Subfolder Selection (Directly below Path inputs)
+            pnlFolders = new Panel
+            {
+                Location = new Point(25, 148),
+                Size = new Size(435, 256),
+                BackColor = Color.White,
+                Padding = new Padding(12)
+            };
+            pnlFolders.Paint += DrawCardBorder;
+
+            var lblFoldersTitle = new Label
+            {
+                Text = "Subfolder Selection (Uncheck to Exclude)",
+                Location = new Point(12, 10),
+                Size = new Size(410, 22),
+                Font = new Font(this.Font, FontStyle.Bold)
+            };
             tvFolders = new TreeView
             {
-                Location = new Point(12, 35),
-                Size = new Size(400, 210),
+                Location = new Point(12, 36),
+                Size = new Size(411, 206),
                 CheckBoxes = true,
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                 BorderStyle = BorderStyle.FixedSingle
             };
             tvFolders.BeforeExpand += TvFolders_BeforeExpand;
@@ -212,83 +183,239 @@ namespace RobocopyGui
             pnlFolders.Controls.AddRange(new Control[] { lblFoldersTitle, tvFolders });
             this.Controls.Add(pnlFolders);
 
+            // 3. TOP-RIGHT CARD: Essential Flags & Settings (Moved UP to top-right)
             pnlOptions = new Panel
             {
-                Location = new Point(475, 100),
-                Size = new Size(430, 260),
-                Anchor = AnchorStyles.Top | AnchorStyles.Right | AnchorStyles.Left | AnchorStyles.Bottom,
+                Location = new Point(475, 20),
+                Size = new Size(460, 254),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 BackColor = Color.White,
                 Padding = new Padding(12)
             };
-            var lblOptionsTitle = new Label { Text = "Essential Flags & Settings", Location = new Point(12, 10), Size = new Size(400, 22), AutoSize = false, TextAlign = ContentAlignment.MiddleLeft, Font = new Font(this.Font, FontStyle.Bold) };
+            pnlOptions.Paint += DrawCardBorder;
 
-            chkUnbuffered = new CheckBox { Text = "Unbuffered I/O (/J - recommendation for large files)", Checked = true, Location = new Point(15, 40), Size = new Size(390, 23) };
-            chkRestartable = new CheckBox { Text = "Restartable Mode (/Z - resumes transfer if network cuts)", Checked = true, Location = new Point(15, 70), Size = new Size(390, 23) };
+            var lblOptionsTitle = new Label
+            {
+                Text = "Essential Flags & Settings",
+                Location = new Point(14, 10),
+                Size = new Size(430, 22),
+                Font = new Font(this.Font, FontStyle.Bold)
+            };
+            chkUnbuffered = new CheckBox
+            {
+                Text = "Unbuffered I/O (/J - recommendation for large files)",
+                Checked = true,
+                Location = new Point(16, 38),
+                Size = new Size(420, 24)
+            };
+            chkRestartable = new CheckBox
+            {
+                Text = "Restartable Mode (/Z - resumes transfer if network cuts)",
+                Checked = true,
+                Location = new Point(16, 68),
+                Size = new Size(420, 24)
+            };
 
-            var lblRetries = new Label { Text = "Retries on Failure (/R):", Location = new Point(15, 105), Size = new Size(160, 23), TextAlign = ContentAlignment.MiddleLeft };
-            numRetries = new NumericUpDown { Value = 3, Minimum = 0, Maximum = 1000, Location = new Point(185, 105), Size = new Size(80, 23), BorderStyle = BorderStyle.FixedSingle };
+            var lblRetries = new Label
+            {
+                Text = "Retries on Failure (/R):",
+                Location = new Point(16, 104),
+                Size = new Size(170, 24),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+            numRetries = new NumericUpDown
+            {
+                Value = 3,
+                Minimum = 0,
+                Maximum = 1000,
+                Location = new Point(190, 104),
+                Size = new Size(75, 24),
+                BorderStyle = BorderStyle.FixedSingle
+            };
 
-            var lblWait = new Label { Text = "Wait time (seconds, /W):", Location = new Point(15, 140), Size = new Size(160, 23), TextAlign = ContentAlignment.MiddleLeft };
-            numWait = new NumericUpDown { Value = 2, Minimum = 0, Maximum = 1000, Location = new Point(185, 140), Size = new Size(80, 23), BorderStyle = BorderStyle.FixedSingle };
+            var lblWait = new Label
+            {
+                Text = "Wait time (seconds, /W):",
+                Location = new Point(16, 140),
+                Size = new Size(170, 24),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+            numWait = new NumericUpDown
+            {
+                Value = 2,
+                Minimum = 0,
+                Maximum = 1000,
+                Location = new Point(190, 140),
+                Size = new Size(75, 24),
+                BorderStyle = BorderStyle.FixedSingle
+            };
 
-            var lblFilter = new Label { Text = "File Pattern (e.g. *.zip):", Location = new Point(15, 175), Size = new Size(160, 23), TextAlign = ContentAlignment.MiddleLeft };
-            txtFileFilter = new TextBox { Text = "*.*", Location = new Point(185, 175), Size = new Size(200, 23), BorderStyle = BorderStyle.FixedSingle };
+            var lblFilter = new Label
+            {
+                Text = "File Pattern (e.g. *.zip):",
+                Location = new Point(16, 176),
+                Size = new Size(170, 24),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+            txtFileFilter = new TextBox
+            {
+                Text = "*.*",
+                Location = new Point(190, 176),
+                Size = new Size(240, 24),
+                BorderStyle = BorderStyle.FixedSingle
+            };
 
             pnlOptions.Controls.AddRange(new Control[] { lblOptionsTitle, chkUnbuffered, chkRestartable, lblRetries, numRetries, lblWait, numWait, lblFilter, txtFileFilter });
             this.Controls.Add(pnlOptions);
 
-            // Overall Progress Card (Prominent & Clean)
-            var pnlOverall = new Panel
+            // 4. MIDDLE-RIGHT CARD: Action Controls (Start/Play, Stop, Save/Disk)
+            pnlActions = new Panel
             {
-                Location = new Point(30, 375),
-                Size = new Size(875, 65),
-                Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                Location = new Point(475, 284),
+                Size = new Size(460, 120),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 BackColor = Color.White,
                 Padding = new Padding(12)
             };
-            lblOverallProgress = new Label { Text = "Overall Progress: Ready", Location = new Point(12, 10), Size = new Size(850, 20), Font = new Font(this.Font, FontStyle.Bold), TextAlign = ContentAlignment.MiddleLeft, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-            overallProgressBar = new ProgressBar { Location = new Point(12, 33), Size = new Size(850, 18), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+            pnlActions.Paint += DrawCardBorder;
+
+            var lblActionsTitle = new Label
+            {
+                Text = "Transfer Controls",
+                Location = new Point(14, 10),
+                Size = new Size(430, 20),
+                Font = new Font(this.Font, FontStyle.Bold)
+            };
+
+            var lblActionsHint = new Label
+            {
+                Text = "Hover over an icon button to see its action:",
+                Location = new Point(14, 30),
+                Size = new Size(430, 18),
+                ForeColor = Color.FromArgb(100, 116, 139),
+                Font = new Font("Segoe UI", 8.5F, FontStyle.Regular)
+            };
+
+            // Play Button (Start)
+            btnStart = new Button
+            {
+                Location = new Point(16, 54),
+                Size = new Size(76, 50),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(240, 253, 244),
+                Image = CreatePlayIcon(),
+                Cursor = Cursors.Hand
+            };
+            btnStart.FlatAppearance.BorderColor = Color.FromArgb(34, 197, 94);
+            btnStart.FlatAppearance.BorderSize = 1;
+            btnStart.Click += BtnStart_Click;
+            toolTip.SetToolTip(btnStart, "Start Copying (Play)");
+
+            // Stop Button (Stop/Cancel)
+            btnStop = new Button
+            {
+                Location = new Point(102, 54),
+                Size = new Size(76, 50),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(243, 244, 246),
+                Image = CreateStopIcon(),
+                Enabled = false,
+                Cursor = Cursors.Hand
+            };
+            btnStop.FlatAppearance.BorderColor = Color.FromArgb(209, 213, 219);
+            btnStop.FlatAppearance.BorderSize = 1;
+            btnStop.Click += BtnStop_Click;
+            toolTip.SetToolTip(btnStop, "Stop / Cancel Transfer (Stop)");
+
+            // Save Button (Disk)
+            btnSaveConfig = new Button
+            {
+                Location = new Point(188, 54),
+                Size = new Size(76, 50),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(239, 246, 255),
+                Image = CreateDiskIcon(),
+                Cursor = Cursors.Hand
+            };
+            btnSaveConfig.FlatAppearance.BorderColor = Color.FromArgb(59, 130, 246);
+            btnSaveConfig.FlatAppearance.BorderSize = 1;
+            btnSaveConfig.Click += BtnSaveConfig_Click;
+            toolTip.SetToolTip(btnSaveConfig, "Save Settings to config.json (Disk)");
+
+            pnlActions.Controls.AddRange(new Control[] { lblActionsTitle, lblActionsHint, btnStart, btnStop, btnSaveConfig });
+            this.Controls.Add(pnlActions);
+
+            // 5. BOTTOM SECTION: Overall Progress Card (Full Width)
+            pnlOverall = new Panel
+            {
+                Location = new Point(25, 414),
+                Size = new Size(910, 68),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                BackColor = Color.White,
+                Padding = new Padding(12)
+            };
+            pnlOverall.Paint += DrawCardBorder;
+
+            lblOverallProgress = new Label
+            {
+                Text = "Overall Progress: Ready",
+                Location = new Point(14, 10),
+                Size = new Size(882, 20),
+                Font = new Font(this.Font, FontStyle.Bold),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+            };
+            overallProgressBar = new ProgressBar
+            {
+                Location = new Point(14, 34),
+                Size = new Size(882, 20),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+            };
             pnlOverall.Controls.AddRange(new Control[] { lblOverallProgress, overallProgressBar });
             this.Controls.Add(pnlOverall);
 
-            // Control Buttons (Start, Stop, Save)
-            btnStart = new Button { Text = "Start Copying", Location = new Point(30, 455), Size = new Size(160, 38), BackColor = Color.FromArgb(46, 125, 50), ForeColor = Color.White, Font = new Font(this.Font, FontStyle.Bold), Anchor = AnchorStyles.Bottom | AnchorStyles.Left, FlatStyle = FlatStyle.Flat };
-            btnStart.FlatAppearance.BorderSize = 0;
-            btnStart.Click += BtnStart_Click;
-
-            btnStop = new Button { Text = "Stop/Cancel", Location = new Point(205, 455), Size = new Size(160, 38), BackColor = Color.FromArgb(198, 40, 40), ForeColor = Color.White, Font = new Font(this.Font, FontStyle.Bold), Enabled = false, Anchor = AnchorStyles.Bottom | AnchorStyles.Left, FlatStyle = FlatStyle.Flat };
-            btnStop.FlatAppearance.BorderSize = 0;
-            btnStop.Click += BtnStop_Click;
-
-            btnSaveConfig = new Button { Text = "Save Settings", Location = new Point(745, 455), Size = new Size(160, 38), BackColor = Color.White, ForeColor = Color.FromArgb(33, 150, 243), Font = new Font(this.Font, FontStyle.Bold), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, FlatStyle = FlatStyle.Flat };
-            btnSaveConfig.FlatAppearance.BorderColor = Color.FromArgb(33, 150, 243);
-            btnSaveConfig.FlatAppearance.BorderSize = 1;
-            btnSaveConfig.Click += BtnSaveConfig_Click;
-
-            this.Controls.AddRange(new Control[] { btnStart, btnStop, btnSaveConfig });
-
-            // Lower Section: Current File & Log (Card style)
+            // 6. BOTTOM SECTION: Current File & Live Log (Full Width)
             pnlProgress = new Panel
             {
-                Location = new Point(30, 505),
-                Size = new Size(875, 220),
-                Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                Location = new Point(25, 492),
+                Size = new Size(910, 252),
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                 BackColor = Color.White,
                 Padding = new Padding(12)
             };
+            pnlProgress.Paint += DrawCardBorder;
 
-            lblStatus = new Label { Text = "Status: Idle", Location = new Point(12, 10), Size = new Size(850, 20), Font = new Font(this.Font, FontStyle.Bold), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-            lblCurrentFile = new Label { Text = "Current File: None", Location = new Point(12, 32), Size = new Size(850, 18), AutoEllipsis = true, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-            fileProgressBar = new ProgressBar { Location = new Point(12, 53), Size = new Size(850, 10), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+            lblStatus = new Label
+            {
+                Text = "Status: Idle",
+                Location = new Point(14, 10),
+                Size = new Size(882, 20),
+                Font = new Font(this.Font, FontStyle.Bold),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+            };
+            lblCurrentFile = new Label
+            {
+                Text = "Current File: None",
+                Location = new Point(14, 30),
+                Size = new Size(882, 18),
+                AutoEllipsis = true,
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+            };
+            fileProgressBar = new ProgressBar
+            {
+                Location = new Point(14, 50),
+                Size = new Size(882, 10),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+            };
 
             txtLog = new TextBox
             {
-                Location = new Point(12, 70),
-                Size = new Size(850, 138),
+                Location = new Point(14, 66),
+                Size = new Size(882, 172),
                 Multiline = true,
                 ReadOnly = true,
                 ScrollBars = ScrollBars.Vertical,
-                BackColor = Color.FromArgb(24, 24, 27), // Modern dark slate
+                BackColor = Color.FromArgb(24, 24, 27),
                 ForeColor = Color.FromArgb(228, 228, 231),
                 Font = new Font("Consolas", 9F),
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
@@ -297,6 +424,15 @@ namespace RobocopyGui
 
             pnlProgress.Controls.AddRange(new Control[] { lblStatus, lblCurrentFile, fileProgressBar, txtLog });
             this.Controls.Add(pnlProgress);
+        }
+
+        private static void DrawCardBorder(object? sender, PaintEventArgs e)
+        {
+            if (sender is Panel panel)
+            {
+                using var pen = new Pen(Color.FromArgb(226, 232, 240), 1);
+                e.Graphics.DrawRectangle(pen, 0, 0, panel.Width - 1, panel.Height - 1);
+            }
         }
 
         private void LoadConfigToUi()
@@ -608,6 +744,12 @@ namespace RobocopyGui
             btnStart.Enabled = !running;
             btnStop.Enabled = running;
 
+            btnStart.BackColor = !running ? Color.FromArgb(240, 253, 244) : Color.FromArgb(243, 244, 246);
+            btnStart.FlatAppearance.BorderColor = !running ? Color.FromArgb(34, 197, 94) : Color.FromArgb(209, 213, 219);
+
+            btnStop.BackColor = running ? Color.FromArgb(254, 242, 242) : Color.FromArgb(243, 244, 246);
+            btnStop.FlatAppearance.BorderColor = running ? Color.FromArgb(239, 68, 68) : Color.FromArgb(209, 213, 219);
+
             txtSource.Enabled = !running;
             txtDestination.Enabled = !running;
             btnBrowseSource.Enabled = !running;
@@ -689,15 +831,65 @@ namespace RobocopyGui
 
         private static Bitmap CreateFolderIcon()
         {
-            var bmp = new Bitmap(16, 16);
-            using (var g = Graphics.FromImage(bmp))
-            {
-                g.SmoothingMode = SmoothingMode.AntiAlias;
-                using var tabBrush = new SolidBrush(Color.FromArgb(202, 138, 4));
-                using var bodyBrush = new SolidBrush(Color.FromArgb(234, 179, 8));
-                g.FillRectangle(tabBrush, 1, 2, 6, 3);
-                g.FillRectangle(bodyBrush, 1, 4, 14, 10);
-            }
+            var bmp = new Bitmap(20, 20);
+            using var g = Graphics.FromImage(bmp);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            using var tabBrush = new SolidBrush(Color.FromArgb(217, 119, 6)); // Amber dark
+            using var bodyBrush = new SolidBrush(Color.FromArgb(245, 158, 11)); // Amber vibrant
+            using var flapBrush = new SolidBrush(Color.FromArgb(251, 191, 36)); // Amber light
+            using var pen = new Pen(Color.FromArgb(180, 83, 9), 1);
+
+            g.FillRectangle(tabBrush, 2, 2, 7, 4);
+            g.FillRectangle(bodyBrush, 2, 5, 16, 12);
+            g.FillPolygon(flapBrush, new Point[] {
+                new Point(2, 8),
+                new Point(18, 8),
+                new Point(16, 17),
+                new Point(2, 17)
+            });
+            g.DrawRectangle(pen, 2, 5, 15, 11);
+            return bmp;
+        }
+
+        private static Bitmap CreatePlayIcon()
+        {
+            var bmp = new Bitmap(24, 24);
+            using var g = Graphics.FromImage(bmp);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            using var brush = new SolidBrush(Color.FromArgb(22, 163, 74)); // Emerald green
+            PointF[] points = {
+                new PointF(7, 4),
+                new PointF(19, 12),
+                new PointF(7, 20)
+            };
+            g.FillPolygon(brush, points);
+            return bmp;
+        }
+
+        private static Bitmap CreateStopIcon()
+        {
+            var bmp = new Bitmap(24, 24);
+            using var g = Graphics.FromImage(bmp);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            using var brush = new SolidBrush(Color.FromArgb(220, 38, 38)); // Rose red
+            g.FillRectangle(brush, 6, 6, 12, 12);
+            return bmp;
+        }
+
+        private static Bitmap CreateDiskIcon()
+        {
+            var bmp = new Bitmap(24, 24);
+            using var g = Graphics.FromImage(bmp);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            using var bodyBrush = new SolidBrush(Color.FromArgb(37, 99, 235)); // Royal blue
+            using var whiteBrush = new SolidBrush(Color.White);
+            using var shutterBrush = new SolidBrush(Color.FromArgb(203, 213, 225));
+            using var pen = new Pen(Color.FromArgb(30, 64, 175), 1);
+
+            g.FillRectangle(bodyBrush, 3, 3, 18, 18);
+            g.FillRectangle(shutterBrush, 7, 3, 9, 7);
+            g.DrawRectangle(pen, 9, 4, 3, 4);
+            g.FillRectangle(whiteBrush, 6, 13, 12, 7);
             return bmp;
         }
     }
