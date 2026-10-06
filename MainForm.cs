@@ -67,12 +67,14 @@ namespace RobocopyGui
         private void InitializeFormComponents()
         {
             // Main Window Settings
-            this.Text = "Robocopy GUI Wrapper";
+            this.Text = "ROBOCoy: Your GUI version";
             this.Size = new Size(960, 800);
             this.MinimumSize = new Size(960, 750);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.Font = new Font("Segoe UI", 9.5F, FontStyle.Regular, GraphicsUnit.Point);
             this.BackColor = Color.FromArgb(244, 246, 249);
+            this.DoubleBuffered = true;
+            this.Icon = CreateRobotIcon();
 
             toolTip = new ToolTip
             {
@@ -90,7 +92,6 @@ namespace RobocopyGui
                 BackColor = Color.White,
                 Padding = new Padding(12)
             };
-            pnlPaths.Paint += DrawCardBorder;
 
             var lblSource = new Label
             {
@@ -162,7 +163,6 @@ namespace RobocopyGui
                 BackColor = Color.White,
                 Padding = new Padding(12)
             };
-            pnlFolders.Paint += DrawCardBorder;
 
             var lblFoldersTitle = new Label
             {
@@ -192,7 +192,6 @@ namespace RobocopyGui
                 BackColor = Color.White,
                 Padding = new Padding(12)
             };
-            pnlOptions.Paint += DrawCardBorder;
 
             var lblOptionsTitle = new Label
             {
@@ -277,7 +276,6 @@ namespace RobocopyGui
                 BackColor = Color.White,
                 Padding = new Padding(12)
             };
-            pnlActions.Paint += DrawCardBorder;
 
             var lblActionsTitle = new Label
             {
@@ -354,7 +352,6 @@ namespace RobocopyGui
                 BackColor = Color.White,
                 Padding = new Padding(12)
             };
-            pnlOverall.Paint += DrawCardBorder;
 
             lblOverallProgress = new Label
             {
@@ -383,7 +380,6 @@ namespace RobocopyGui
                 BackColor = Color.White,
                 Padding = new Padding(12)
             };
-            pnlProgress.Paint += DrawCardBorder;
 
             lblStatus = new Label
             {
@@ -424,15 +420,68 @@ namespace RobocopyGui
 
             pnlProgress.Controls.AddRange(new Control[] { lblStatus, lblCurrentFile, fileProgressBar, txtLog });
             this.Controls.Add(pnlProgress);
+
+            // Configure card panels with squircle backgrounds and seamless child control backgrounds
+            foreach (var pnl in new[] { pnlPaths, pnlFolders, pnlOptions, pnlActions, pnlOverall, pnlProgress })
+            {
+                pnl.BackColor = this.BackColor;
+                pnl.Paint += DrawSquircleCard;
+                pnl.Resize += (s, e) => pnl.Invalidate();
+                foreach (Control child in pnl.Controls)
+                {
+                    if (child is Label or CheckBox)
+                    {
+                        child.BackColor = Color.White;
+                    }
+                }
+            }
         }
 
-        private static void DrawCardBorder(object? sender, PaintEventArgs e)
+        private static void DrawSquircleCard(object? sender, PaintEventArgs e)
         {
-            if (sender is Panel panel)
+            if (sender is not Panel panel) return;
+
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+            var rect = new RectangleF(0.5f, 0.5f, panel.Width - 1.5f, panel.Height - 1.5f);
+            using var path = CreateSquirclePath(rect, 12f);
+
+            using var fillBrush = new SolidBrush(Color.White);
+            e.Graphics.FillPath(fillBrush, path);
+
+            using var pen = new Pen(Color.FromArgb(226, 232, 240), 1f);
+            e.Graphics.DrawPath(pen, path);
+        }
+
+        internal static GraphicsPath CreateSquirclePath(RectangleF rect, float radius)
+        {
+            var path = new GraphicsPath();
+            if (radius <= 0)
             {
-                using var pen = new Pen(Color.FromArgb(226, 232, 240), 1);
-                e.Graphics.DrawRectangle(pen, 0, 0, panel.Width - 1, panel.Height - 1);
+                path.AddRectangle(rect);
+                return path;
             }
+
+            float x = rect.X;
+            float y = rect.Y;
+            float w = rect.Width;
+            float h = rect.Height;
+            float r = Math.Min(radius, Math.Min(w, h) / 2f);
+
+            // Bézier approximation for squircle (continuous curvature):
+            float c = r * 0.65f;
+
+            path.AddLine(x + r, y, x + w - r, y);
+            path.AddBezier(x + w - r, y, x + w - r + c, y, x + w, y + r - c, x + w, y + r);
+            path.AddLine(x + w, y + r, x + w, y + h - r);
+            path.AddBezier(x + w, y + h - r, x + w, y + h - r + c, x + w - r + c, y + h, x + w - r, y + h);
+            path.AddLine(x + w - r, y + h, x + r, y + h);
+            path.AddBezier(x + r, y + h, x + r - c, y + h, x, y + h - r + c, x, y + h - r);
+            path.AddLine(x, y + h - r, x, y + r);
+            path.AddBezier(x, y + r, x, y + r - c, x + r - c, y, x + r, y);
+
+            path.CloseFigure();
+            return path;
         }
 
         private void LoadConfigToUi()
@@ -891,6 +940,111 @@ namespace RobocopyGui
             g.DrawRectangle(pen, 9, 4, 3, 4);
             g.FillRectangle(whiteBrush, 6, 13, 12, 7);
             return bmp;
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
+        private static extern bool DestroyIcon(IntPtr handle);
+
+        internal static Bitmap CreateRobotBitmap(int size)
+        {
+            var bmp = new Bitmap(size, size);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.Clear(Color.Transparent);
+
+                float s = size / 32f;
+
+                // Antenna stem and tip
+                using var antennaPen = new Pen(Color.FromArgb(99, 102, 241), Math.Max(1.5f, 2f * s));
+                g.DrawLine(antennaPen, 16f * s, 2f * s, 16f * s, 8f * s);
+                using var tipBrush = new SolidBrush(Color.FromArgb(239, 68, 68)); // Red bulb
+                g.FillEllipse(tipBrush, 14f * s, 1f * s, 4f * s, 4f * s);
+
+                // Side bolts / Ears
+                using var earBrush = new SolidBrush(Color.FromArgb(148, 163, 184));
+                g.FillRectangle(earBrush, 2f * s, 13f * s, 3f * s, 7f * s);
+                g.FillRectangle(earBrush, 27f * s, 13f * s, 3f * s, 7f * s);
+
+                // Head (Squircle box)
+                using var headBrush = new SolidBrush(Color.FromArgb(79, 70, 229)); // Rich Indigo
+                using var headPen = new Pen(Color.FromArgb(49, 46, 129), Math.Max(1f, 1.5f * s));
+                using var headPath = CreateSquirclePath(new RectangleF(4f * s, 7f * s, 24f * s, 21f * s), 6f * s);
+                g.FillPath(headBrush, headPath);
+                g.DrawPath(headPen, headPath);
+
+                // Visor band
+                using var visorBrush = new SolidBrush(Color.FromArgb(30, 27, 75));
+                using var visorPath = CreateSquirclePath(new RectangleF(6f * s, 11f * s, 20f * s, 9f * s), 3f * s);
+                g.FillPath(visorBrush, visorPath);
+
+                // Eyes (Glowing cyan / white pupil)
+                using var eyeBrush = new SolidBrush(Color.FromArgb(56, 189, 248));
+                using var pupilBrush = new SolidBrush(Color.White);
+                g.FillEllipse(eyeBrush, 8f * s, 13f * s, 5f * s, 5f * s);
+                g.FillEllipse(eyeBrush, 19f * s, 13f * s, 5f * s, 5f * s);
+                g.FillEllipse(pupilBrush, 10f * s, 14f * s, 2f * s, 2f * s);
+                g.FillEllipse(pupilBrush, 21f * s, 14f * s, 2f * s, 2f * s);
+
+                // Mouth / Grille
+                using var mouthPen = new Pen(Color.FromArgb(165, 180, 252), Math.Max(1f, 1.2f * s));
+                g.DrawLine(mouthPen, 10f * s, 24f * s, 22f * s, 24f * s);
+                g.DrawLine(mouthPen, 12f * s, 22f * s, 12f * s, 25f * s);
+                g.DrawLine(mouthPen, 16f * s, 22f * s, 16f * s, 25f * s);
+                g.DrawLine(mouthPen, 20f * s, 22f * s, 20f * s, 25f * s);
+            }
+            return bmp;
+        }
+
+        internal static Icon CreateRobotIcon()
+        {
+            using var bmp = CreateRobotBitmap(32);
+            IntPtr hIcon = bmp.GetHicon();
+            Icon icon = (Icon)Icon.FromHandle(hIcon).Clone();
+            DestroyIcon(hIcon);
+            return icon;
+        }
+
+        internal static void SaveIcoFile(string outputPath, int[] sizes)
+        {
+            var images = new List<byte[]>();
+            foreach (int size in sizes)
+            {
+                using var bmp = CreateRobotBitmap(size);
+                using var ms = new MemoryStream();
+                bmp.Save(ms, ImageFormat.Png);
+                images.Add(ms.ToArray());
+            }
+
+            using var fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write);
+            using var writer = new BinaryWriter(fs);
+
+            // Icon Header (6 bytes)
+            writer.Write((ushort)0); // reserved
+            writer.Write((ushort)1); // type 1 = icon
+            writer.Write((ushort)images.Count); // image count
+
+            // Directory entries (16 bytes per image)
+            int offset = 6 + (16 * images.Count);
+            for (int i = 0; i < images.Count; i++)
+            {
+                int s = sizes[i];
+                writer.Write((byte)(s >= 256 ? 0 : s)); // width
+                writer.Write((byte)(s >= 256 ? 0 : s)); // height
+                writer.Write((byte)0); // color count
+                writer.Write((byte)0); // reserved
+                writer.Write((ushort)1); // planes
+                writer.Write((ushort)32); // bpp
+                writer.Write(images[i].Length); // bytes in resource
+                writer.Write(offset); // offset
+                offset += images[i].Length;
+            }
+
+            // Image byte contents
+            foreach (var imgData in images)
+            {
+                writer.Write(imgData);
+            }
         }
     }
 }

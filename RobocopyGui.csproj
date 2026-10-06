@@ -8,6 +8,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>RobocopyGui</AssemblyName>
     <RootNamespace>RobocopyGui</RootNamespace>
+    <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
