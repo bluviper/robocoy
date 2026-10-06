@@ -18,10 +18,11 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 Write-Host "==> Publishing Portable Release (Lightweight, requires .NET 9)..." -ForegroundColor Cyan
 dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish\portable --nologo
 
-# Copy primary standalone executable to root of publish/
-Copy-Item publish\standalone\ROBOCoy.exe publish\ROBOCoy.exe -Force
+# Copy explicitly named single-file executables to publish/
+Copy-Item publish\standalone\ROBOCoy.exe publish\ROBOCoy-Standalone.exe -Force
+Copy-Item publish\portable\ROBOCoy.exe publish\ROBOCoy-Portable.exe -Force
 
 Write-Host ""
 Write-Host "==> Deployment complete!" -ForegroundColor Green
-Write-Host "   Standalone (.exe runs on any Windows machine):  $ScriptDir\publish\ROBOCoy.exe"
-Write-Host "   Portable (ultra-lightweight ~230KB single file): $ScriptDir\publish\portable\ROBOCoy.exe"
+Write-Host "   Standalone (Runs on any Windows PC, 0 dependencies): $ScriptDir\publish\ROBOCoy-Standalone.exe"
+Write-Host "   Portable   (Ultra-lightweight, requires .NET 9):      $ScriptDir\publish\ROBOCoy-Portable.exe"
